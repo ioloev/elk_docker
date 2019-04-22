@@ -1,0 +1,37 @@
+version: '2'
+services:
+    proxy:
+        image: registry:5000/nginx:latest
+        restart: always
+        ports:
+            - "80:80"
+            - "443:443"
+#            - "4560:4560"
+#            - "1522:1522"
+#            - "1414:1414"
+#            - "1433:1433"
+#            - "9901:9901"
+#            - "9902:9902"
+#            - "9903:9903"
+#            - "9904:9904"
+#            - "9905:9905"
+#            - "9910:9910"
+        volumes:
+            - "./nginx.conf:/etc/nginx/nginx.conf:ro"
+#            - "./index.html:/usr/share/nginx/html/index.html:ro"
+#            - "./favicon.ico:/usr/share/nginx/html/favicon.ico:ro"
+#            - "/u01/share:/share:ro"
+#        extra_hosts:
+#           - ous:10.0.0.1" # Домен не резолвится
+        network_mode:
+            host
+        logging:
+            driver: json-file
+            options:
+                max-size: "2m"
+                max-file: "2"
+
+networks:
+  default:
+    driver:
+      host

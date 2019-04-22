@@ -1,0 +1,43 @@
+version: "2"
+
+services:
+    prometheus:
+        image: registry:5000/prom/prometheus:latest
+        restart: always
+        user: "0"
+        ports:
+            - "9091:9090"
+        command: "--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --web.console.libraries=/usr/share/prometheus/console_libraries --web.console.templates=/usr/share/prometheus/consoles"
+        volumes:
+            - "./prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+            - "./data/prometheus:/prometheus"
+        extra_hosts:
+            - "ous:10.0.0.1"
+        logging:
+            driver: json-file
+            options:
+                max-size: "16m"
+                max-file: "8"
+
+    grafana:
+        image: registry:5000/grafana/grafana:latest
+        restart: always
+        user: "0"
+        environment:
+            - GF_SERVER_ROOT_URL=http://localhost/grafana
+            - GF_SERVER_ENFORCE_DOMAIN=false
+        ports:
+            - "127.0.0.1:3000:3000"
+        volumes:
+            - "./grafana.ini:/etc/grafana/grafana.ini:ro"
+            - "./data/grafana:/var/lib/grafana"
+        logging:
+            driver: json-file
+            options:
+                max-size: "16m"
+                max-file: "8"
+
+#networks:
+#  default:
+#    external:
+#      name: logging_elk

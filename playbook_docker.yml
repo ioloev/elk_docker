@@ -1,0 +1,170 @@
+---
+- hosts: all
+  vars:
+    docker_version: 18.09.4-3.el7.x86_64
+    docker_cli_version: 18.09.4-3.el7.x86_64
+    containerd_version: 1.2.5-3.1.el7.x86_64
+    repohost: http://192.168.0.2:8000/docker
+    docker_compose_version: Linux-x86_64
+    container_selinux_version: 2.74-1.el7.noarch
+    compose: "/docker/compose"
+  tasks:
+    - name: Disable selinux
+      selinux:
+        state: disabled
+
+    - name: Set sysctl params
+      sysctl:
+        name: vm.max_map_count
+        value: 262144
+        state: present
+
+    - name: Install docker packages
+      yum:
+        name:
+          - "{{ repohost }}/container-selinux-{{ container_selinux_version }}.rpm"
+          - "{{ repohost }}/containerd.io-{{ containerd_version }}.rpm"
+          - "{{ repohost }}/docker-ce-{{ docker_version }}.rpm"
+          - "{{ repohost }}/docker-ce-cli-{{ docker_cli_version }}.rpm"
+
+    - name: create docker dir, REMOVE ME
+      file:
+        name: /etc/docker
+        state: directory
+        mode: 0755
+
+    - name: Insecure registry, REMOVE ME
+      copy:
+        src: files/daemon.json
+        dest: /etc/docker/daemon.json
+        mode: 0755
+
+    - name: Start docker service
+      systemd:
+        daemon_reload: yes
+        enabled: yes
+        state: restarted
+        name: docker.service
+
+    - name: Install /usr/local/bin/docker-compose
+      get_url:
+        url: "{{ repohost }}/docker-compose-{{ docker_compose_version }}"
+        dest: "/usr/local/bin/docker-compose"
+        mode: 0755
+
+    - name: Create symlink for /usr/local/bin/docker-compose
+      file:
+        src: "/usr/local/bin/docker-compose"
+        dest: "/usr/local/bin/dc"
+        state: link
+
+    - name: Create monitoring compose dir
+      file: 
+        name: "{{ compose }}/monitoring"
+        state: directory
+        mode: 0755
+
+    - name: Copy monitoring files
+      copy:
+        src: "files/monitoring-server/{{ item }}"
+        dest: "{{ compose }}/monitoring"
+      with_items:
+        - docker-compose.yml
+        - prometheus.yml
+        - grafana.ini
+      register: copy_files
+
+    - name: Create logging compose dir
+      file:
+        name: "{{ compose }}/logging"
+        state: directory
+        mode: 0755
+
+    - name: Create logging data dir
+      file:
+        name: "{{ compose }}/logging/data"
+        state: directory
+        mode: 0755
+        owner: 1000
+        group: 1000
+
+    - name: Copy logging files
+      copy:
+        src: "files/logging/{{ item }}"
+        dest: "{{ compose }}/logging"
+      with_items:
+          - docker-compose.yml
+          - logstash.conf
+          - kibana.yml
+
+    - name: Create nginx compose dir
+      file: 
+        name: "{{ compose }}/nginx"
+        state: directory
+        mode: 0755
+
+    - name: Copy logging files
+      copy:
+        src: "files/nginx/{{ item }}"
+        dest: "{{ compose }}/nginx"
+      with_items:
+          - docker-compose.yml
+          - nginx.conf
+
+    - name: Run logging /usr/local/bin/docker-compose down
+      command: "/usr/local/bin/docker-compose down --remove-orphans"
+      args:
+        chdir: "{{ compose }}/logging"
+        #      when: copy_files.changed
+
+    - name: Run  logging /usr/local/bin/docker-compose up -d
+      command: "/usr/local/bin/docker-compose up -d"
+      args:
+        chdir: "{{ compose }}/logging"
+        #      when: copy_files.changed
+
+    - name: Run monitoring /usr/local/bin/docker-compose down
+      command: /usr/local/bin/docker-compose down --remove-orphans
+      args:
+        chdir: "{{ compose }}/monitoring"
+        #      when: copy_files.changed
+
+    - name: Run  monitoring /usr/local/bin/docker-compose up -d
+      command: /usr/local/bin/docker-compose up -d
+      args:
+        chdir: "{{ compose }}/monitoring"
+        #      when: copy_files.changed
+      
+    - name: Run nginx /usr/local/bin/docker-compose down
+      command: /usr/local/bin/docker-compose down --remove-orphans
+      args:
+        chdir: "{{ compose }}/nginx"
+        #      when: copy_files.changed
+
+    - name: Run  nginx /usr/local/bin/docker-compose up -d
+      command: /usr/local/bin/docker-compose up -d
+      args:
+        chdir: "{{ compose }}/nginx"
+        #      when: copy_files.changed
+
+    - name: gather running services
+      service_facts:
+      tags: firewall
+
+    - name: Allow http traffic
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+        immediate: yes
+      when: hostvars[inventory_hostname]['services']['firewalld.service']['state'] == "running"
+      tags: firewall
+
+    - name: Allow https traffic
+      firewalld:
+        service: https
+        permanent: yes
+        state: enabled
+        immediate: yes
+      when: hostvars[inventory_hostname]['services']['firewalld.service']['state'] == "running"
+      tags: firewall

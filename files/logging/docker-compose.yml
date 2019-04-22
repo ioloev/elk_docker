@@ -1,0 +1,81 @@
+version: '2'
+
+services:
+    elasticsearch:
+        restart: always
+        image: registry:5000/docker.elastic.co/elasticsearch/elasticsearch:6.7.1
+        environment:
+            ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+        ports:
+            - "127.0.0.1:9200:9200"
+            - "127.0.0.1:9300:9300"
+        volumes: 
+            - ./data:/usr/share/elasticsearch/data:rw
+        logging:
+            driver: json-file
+            options:
+                max-size: "4m"
+                max-file: "4"
+#        networks:
+#            - elk
+
+    kibana:
+        restart: always
+        image: registry:5000/docker.elastic.co/kibana/kibana:6.7.1
+        mem_limit: 500m
+        ports:
+            - "127.0.0.1:5601:5601"
+        volumes:
+            - ./kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+        links:
+            - elasticsearch
+#        environment:
+#            ELASTICSEARCH_HOSTS: http://elasticsearch:9200/
+        logging:
+            driver: json-file
+            options:
+                max-size: "4m"
+                max-file: "4"
+
+    logstash:
+        restart: always
+        image: registry:5000/docker.elastic.co/logstash/logstash:6.7.1
+        ports:
+            - "127.0.0.1:4560:4560"
+            - "127.0.0.1:12201:12201/udp"
+            - "127.0.0.1:5044:5044"
+            - "127.0.0.1:5140:5140"
+        volumes: 
+            - ./logstash.conf:/usr/share/logstash/config/logstash.conf:ro
+        environment:
+            LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+        links:
+            - elasticsearch
+        logging:
+            driver: json-file
+            options:
+                max-size: "4m"
+                max-file: "4"
+        depends_on:
+            - elasticsearch
+
+    elasticsearch_exporter:
+        restart: always
+        image: registry:5000/justwatch/elasticsearch_exporter
+        command:
+          - '-es.uri=http://elasticsearch:9200'
+        ports:
+            - "127.0.0.1:9108:9108"
+        logging:
+            driver: json-file
+            options:
+                max-size: "4m"
+                max-file: "4"
+#        networks:
+#            - elk
+        depends_on:
+            - elasticsearch
+
+#networks:
+#        elk:
+#            driver: bridge
